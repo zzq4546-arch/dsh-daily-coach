@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dsh-daily-coach preview</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 600px at 70% -10%, #1b2334, #0d1015 60%);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+  }
+  .fake { display: flex; height: 100vh; }
+  .side { width: 236px; border-right: 1px solid rgba(255, 255, 255, .05); }
+  .main { flex: 1; max-width: 780px; margin: 0 auto; padding: 96px 48px; }
+  .line { height: 11px; border-radius: 6px; background: rgba(255, 255, 255, .05); margin: 16px 0; }
+  .line.short { width: 38%; }
+  .line.mid { width: 66%; }
+  .line.long { width: 88%; }
+  .composer {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    width: 620px; height: 52px; border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .03);
+  }
+</style>
+</head>
+<body>
+<div class="fake">
+  <div class="side"></div>
+  <div class="main">
+    <div class="line short"></div>
+    <div class="line long"></div>
+    <div class="line mid"></div>
+    <div class="line long"></div>
+    <div class="line short"></div>
+    <div class="line mid"></div>
+  </div>
+</div>
+<div class="composer"></div>
+<script>
+  /* Minimal stand-in for the DSH web module loader: hand the plugin a context
+     whose effect() runs the mount function and keeps its disposer. */
+  window.__ModuleLoader__ = {
+    load: function (mod) {
+      try {
+        var exportsObj = mod.factory(function () { return {}; });
+        exportsObj.apply({
+          effect: function (fn) {
+            var dispose = fn();
+            return typeof dispose === 'function' ? dispose : function () {};
+          }
+        });
+      } catch (err) {
+        document.title = 'ERROR: ' + err.message;
+        console.error(err);
+      }
+    }
+  };
+</script>
+<script src="client.js"></script>
+</body>
+</html>

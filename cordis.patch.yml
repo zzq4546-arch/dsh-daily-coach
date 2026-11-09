@@ -1,0 +1,5 @@
+# dsh-daily-coach roster patch — merged by the plugin loader (dsh.bundle.patch).
+# Mounts the host half so the client bundle reaches the page.
+- insert:
+    - id: dsh-daily-coach
+      name: 'dsh-daily-coach'

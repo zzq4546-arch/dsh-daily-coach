@@ -1,0 +1,51 @@
+{
+  "name": "dsh-daily-coach",
+  "version": "0.2.0",
+  "description": "每日教练：DSH Web 界面右上角的打卡面板——每日习惯、本周清单、连续全勤与 AI 审批考勤，并能写每日复盘、记笔记、自定义或导入 9 周计划。纯 DOM，无宿主侧逻辑。",
+  "type": "module",
+  "main": "lib/index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zzq4546-arch/dsh-daily-coach.git"
+  },
+  "homepage": "https://github.com/zzq4546-arch/dsh-daily-coach#readme",
+  "bugs": {
+    "url": "https://github.com/zzq4546-arch/dsh-daily-coach/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-client-plugin",
+    "habits",
+    "study-plan",
+    "daily",
+    "review",
+    "notes"
+  ],
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "approve-code.js",
+    "examples",
+    "README.md",
+    "CHANGELOG.md"
+  ]
+}
