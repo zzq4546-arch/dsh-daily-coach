@@ -17,3 +17,7 @@ desktop.ini
 # 备份
 *.bak
 *.bak-*
+
+# 构建中间产物
+tmp/
+_scratch/

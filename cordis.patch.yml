@@ -1,5 +1,6 @@
-# dsh-daily-coach roster patch — merged by the plugin loader (dsh.bundle.patch).
-# Mounts the host half so the client bundle reaches the page.
+# dsh-calendar-coach bundle patch: 把双面插件行插进 Web profile 的插件名册。
+# 同一行既是宿主插件（exports "." → lib/index.js，注册工具 + /api/dsh-calendar + 提醒引擎），
+# 也是浏览器插件（package.json 的 dsh.client 让 ./client.js 在 Web GUI 里加载）。
 - insert:
-    - id: dsh-daily-coach
-      name: 'dsh-daily-coach'
+    - id: dsh-calendar-coach
+      name: dsh-calendar-coach

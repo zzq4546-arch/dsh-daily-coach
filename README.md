@@ -1,118 +1,193 @@
-# dsh-daily-coach
+# dsh-calendar-coach
 
-DSH Web GUI 右上角的每日打卡面板：4 件每日习惯 + 本周清单 + 连续全勤 + AI 审批考勤，能写**复盘**、**笔记**，计划可以随时**改**或**导入**。纯 DOM 实现，无宿主侧逻辑。
+> **仓库说明**：本仓库原来是 `dsh-daily-coach`（每日教练）。0.3.0 起，它同时是这个合并版插件
+> `dsh-calendar-coach` 的家：包名改成了 `dsh-calendar-coach`（插件 id、数据路径都按新名走），
+> 仓库地址保持 `dsh-daily-coach` 不变。旧的 0.2 版本源码仍在 git 历史里，
+> 旧的说明与截图归档在 [`docs/legacy/`](docs/legacy/)（`README-v0.2.md`、`today.png` 等）。
+> 0.2 的打卡 / 复盘 / 笔记 / 计划 UI 是 MIT 许可的原始实现，本版本直接派生自它，署名保留在 `LICENSE`。
 
-| 今日 | 复盘 | 笔记 | 计划 |
-| --- | --- | --- | --- |
-| ![今日](docs/today.png) | ![复盘](docs/review.png) | ![笔记](docs/notes.png) | ![计划](docs/plan.png) |
+日历 · 每日 DDL · 准时提醒 · 每日教练，合成一个 DSH 插件（宿主 + 浏览器两张脸）。
 
-> 截图来自 `preview.html`（伪造 DSH 模块加载器的本地预览页），所以背景是空的，面板本身和真实 DSH 里一样。
+数据只有一份：`<DSH_HOME>/calendar/calendar.json`（本机默认 `D:\DSH\home\calendar\calendar.json`）。
+原来的 `dsh-daily-coach` 的 localStorage 键（`dsh-daily-coach.v2` / `.plan.v1`）原样保留，
+打卡、复盘、笔记、计划一行代码都没改，所以旧数据零迁移。
 
-## 它长什么样
+## 它能做什么
 
-- 默认固定在右上角，深色玻璃卡片；点「−」折叠成一枚「今日 N/4」胶囊，再点胶囊展开。
-- 按住标题栏（「今日任务」那一行）可以拖到任意位置，折叠后的胶囊也能拖。位置写进 localStorage，重启后还在，窗口变小时自动收回可视区域。
-- 四个页签：
+- **特殊日子**：纪念日 / 生日 / 节日 / 自定义，支持公历和农历（农历按内置 1901–2100 节气表换算），支持每年重复或只过一次。
+- **百天里程碑**：以纪念日为锚点，自动标出第 100/200/300…天，以及 365（一周年）/520（我爱你）/999/1314（一生一世）/2000/3000 天等节点。
+- **每日 DDL**：某天某个时间要做什么，可勾完成、可标优先级，逾期会单独列出来。
+- **三路提醒**：
+  - A 应用内醒目浮层（页面开着时，顶部弹卡 + 提示音 + 系统通知）
+  - B 重要节点发聊天消息（宿主 `schedule` 服务投递给当前会话，页面没开也能到）
+  - C 每天早报（默认 08:00，一条消息汇总今天）
+  - 打开时补发 36 小时内漏掉的提醒
+- **两种形态随时切换**：右下角浮卡 ↔ center 列整页（教练面板右上角「⤢」按钮）。
+- **AI 直接落地**：对 DSH 说"记一下 3 月 14 日是恋爱纪念日""这周五前交简历"，模型会调工具写进同一份数据，不用手动点。
 
-| 页签 | 内容 |
+## 对模型暴露的工具
+
+| 工具 | 用途 |
 | --- | --- |
-| 今日 | 第 N/9 周 · 本周目标、每日习惯（勾选即存）、进度条、考勤行（AI 审批）、本周清单、按小时变化的催促语 |
-| 复盘 | 按日期写当天复盘（自动保存）、「今天学到 / 卡住的地方 / 明天第一件事」快捷插入、最近复盘列表、导出 .md |
-| 笔记 | 新建 / 编辑 / 删除笔记，列表按更新时间倒序；点一条进入编辑，点「完成」收起 |
-| 计划 | 当前计划摘要；编辑计划（JSON）、导入新计划（JSON / 从文件）、复制 / 下载 / 恢复默认；备份区：复制 / 下载 / 恢复 |
+| `calendar_today` | 今天有什么（节日、纪念日、里程碑、到期/逾期 DDL） |
+| `calendar_list` | 查区间内的事件与 DDL |
+| `calendar_add_event` | 加纪念日/生日/节日（可公历或农历、可设提前几天提醒） |
+| `calendar_add_ddl` | 加一条 DDL（日期、可选时间、优先级） |
+| `calendar_update` / `calendar_delete` | 改期、改提醒、勾完成、删除 |
+| `calendar_remind` | 把聊天提醒绑到当前会话 / 开关早报 |
 
-## 数据都在浏览器里
+## HTTP 接口（浏览器端用）
 
-全部状态写 localStorage，没有后端。键名：
+前缀 `/api/dsh-calendar`，必须带 `x-dsh-calendar: 1` 头，跨源请求一律 403。
 
-- `dsh-daily-coach.v2`：打卡、复盘、笔记、折叠状态、面板位置、待审批备注
-- `dsh-daily-coach.plan.v1`：当前使用的计划
+- `GET /health`、`/state?from&to`、`/today?date`、`/lunar?date`、`/pending`、`/upcoming?days`
+- `POST /op`（`{op, payload}`）、`POST /mode`（`{mode:'card'|'page'}`）
 
-v0.1 的 `dsh-daily-coach.v1` 会在首次打开时自动迁移成 v2（打卡按自然日保留，周清单键从 `w1` 改成 `<planId>:w1`），迁移只做一次，旧键不删。
+## 开发
 
-> 换浏览器 / 换机器 / 清站点数据都会丢。要搬走就用「计划 → 复制备份」，粘成文件保存。
-
-## 计划：改与导入
-
-计划是一段 JSON，可以直接在「计划 → 编辑计划」里改，也可以「导入计划」整体替换。切换计划只换周清单，**按日打卡历史全部保留**（历史按 plan.id 隔离，来回切也不串）。
-
-```json
-{
-  "name": "9 周后端实习冲刺",
-  "start": "2026-11-09",
-  "daily": ["项目 60 分钟", "LeetCode 30 分钟", "英语 30 分钟", "5 分钟复盘"],
-  "weeks": [
-    { "goal": "本周目标的一句话", "items": ["清单项 1", "清单项 2", "清单项 3", "清单项 4"] }
-  ]
-}
-```
-
-- `start`：第 1 周的周一（`YYYY-MM-DD`），用它推算今天是第几周。
-- `daily`：每天固定的习惯，1–6 条；条数变了只会影响当天的勾选位数，周清单不会丢。
-- `weeks`：本周清单，缺的那一周显示为空。
-- `id` 可省略，导入时自动生成；恢复默认 = 内置的 9 周计划（id `default-9w`）。
-- 导入会覆盖整份计划并保留每天打卡，导入前会提示当前计划是什么。
-
-示例文件：[`examples/plan.example.json`](examples/plan.example.json)。
-
-## 审批模式：4 项做完不算数，AI 审批通过才算考勤
-
-1. 4 项全勾后，点「提交审批」，在备注里写清楚今天实际做了什么（至少 5 个字，要具体：改了哪个文件、LeetCode 哪一题、英语用的什么材料）。
-2. 点「复制审批请求」，把全文粘贴到 DSH 对话框发给 AI。
-3. AI 核对后回复 6 位审批码；把码填进「审批码」→「确认」。
-4. 通过后考勤显示「已通过 AI 审批 ✓」，连续天数才会 +1；折叠时胶囊显示「今日 4/4 ✓」。
-
-审批码绑定「日期 + 备注」：复制之后再改备注、或抄错一个字符，都会验证失败。剪贴板不可用时，页面会自动展开请求全文供手动复制。
-
-### AI 侧怎么生成审批码
-
-```bash
-node approve-code.js 2026-11-08 "备注原文"
-node approve-code.js --check 2026-11-08 "备注原文" B4Z3Y9
-```
-
-算法与 `client.js` 里的 `expectedCode` 完全一致（FNV-1a + 6 位字母数字，跳过易混字符），所以审批码不能靠猜。
-
-## 安装（本地插件，桌面版）
-
-桌面 profile 由 Electron 独占管理，`dsh plugin --profile desktop ...` 会被拒绝，只能手动装：
-
-1. 把本仓库放进 `<profile>/node_modules/dsh-daily-coach`（可以 `git clone` 到那里，也可以直接复制目录）
-   （本机：`D:\DSH\home\profiles\desktop\node_modules\dsh-daily-coach`）
-2. 编辑 `<profile>/package.json`：
-   - `dependencies` 加 `"dsh-daily-coach": "file:<本目录绝对路径>"`
-   - `dsh.profile.bundles` 数组追加 `"dsh-daily-coach"`
-3. 重启 DSH。
-
-改完代码后要把文件重新复制进 profile 再重启（profile 里是拷贝，不是软链）。
-
-## 本地预览
-
-不装进 profile 也能看效果：直接双击 `preview.html`（它伪造 DSH 的模块加载器），数据同样写 localStorage。
-
-## 重置
-
-浏览器控制台执行（会清掉打卡、复盘、笔记和当前计划）：
-
-```js
-localStorage.removeItem('dsh-daily-coach.v2')
-localStorage.removeItem('dsh-daily-coach.plan.v1')
-```
-
-只重置打卡、保留复盘和笔记：删掉 `v2` 里的 `days` 字段，再刷新。
-
-## 目录结构
+浏览器端由三个片段拼成，改完必须重新构建：
 
 ```
-client.js              全部界面与逻辑（浏览器端，约 2000 行）
-lib/index.js           宿主端空壳，只为让 client 包进页面
-cordis.patch.yml       插件清单补丁（dsh.bundle.patch）
-preview.html           本地预览页
-approve-code.js        命令行算审批码（与 client.js 算法一致）
-examples/plan.example.json
-docs/                  截图
+src/coach.js     合并后的每日教练（var COACH）
+src/calendar.js  日历页 + 提醒卡（var CAL）
+src/shell.js     座位注册 / 形态切换 / 轮询（function apply）
+
+node build.mjs   # → client.js
 ```
 
-## 许可
+片段规则：ES5 语法（`var` + `function`）、无 `import/export`、顶层只有一个绑定、
+不直接操作 `document.body`、颜色只用 `--dsw-alias-*` token。构建器会校验，不符合就拒绝产出。
 
-MIT，见 [LICENSE](LICENSE)。
+农历表 `lib/lunar-table.js` 由 `tools/gen-lunar-table.ps1` 用 .NET
+`ChineseLunisolarCalendar` 生成（1901–2100）。**不要**改用 `Intl` 的
+`zh-CN-u-ca-chinese`：CLDR 与官方农历有偏差（如 2027 年春节会差一天）。
+
+### 工具 schema 的硬要求
+
+输出 schema（`output.schema`）：宿主的 `register()` 会校验它，**每一个 object 都必须显式写
+`additionalProperties`**，漏一层就抛
+`JsonSchemaError: unsupported JSON schema: … must be explicitly true or false`，
+而且会**让整个插件 activate 失败**（不是只坏一个工具）。`lib/tools.js` 的
+`strictSchema()` 会递归补全，新增工具一律用 `outSchema()` 生成输出 schema。
+
+参数 schema（`parameters`）：`register()` **完全不校验**，会原样塞进
+`tools[].function.parameters` 发给模型 API。所以这里要么写成完整 JSON Schema，
+要么交给官方 `defineTool()` 编译；直接写「每个属性挂 `required: true`」的简写而不编译，
+每轮对话都会被 API 打回、整轮失败（2026-11-17 就是这么挂的）：
+
+```
+Invalid schema for function 'calendar_add_ddl':
+{"type":"string","required":true,"description":"要做什么"} is not of type "string"   (INVALID_REQUEST)
+```
+
+`defineTool` 从 `@deepseek-ai/dsh-tools` 取，桌面宿主里这一步会失败
+（`Cannot find package '@deepseek-ai/dsh-tools'`，见 `register.log` 的
+`defineTool=missing -> 自己编译 parameters`），因此 `lib/tools.js` 自带
+`paramSchema()`：把简写编译成 `{ type:'object', properties, required:[…] }`，
+与官方编译结果一致。新增工具只写简写即可，两条路径都覆盖。
+
+自检：`node _scratch/schema-check.mjs`（截获 7 个工具的注册定义，逐项体检 schema，
+并打印 `calendar_add_ddl` 真实发给 API 的那一份）。修复前的两份文件放在
+`_scratch/rollback/`，要回滚直接覆盖 `lib/` 下同名文件。
+
+### 在真实宿主里跑一遍（不动桌面 profile）
+
+```
+$env:DSH_HOME="<临时目录>"
+dsh plugin --profile caltest add "file:<本包绝对路径>"
+dsh --profile caltest web
+```
+
+看两件事：日志里没有 `warning: N entry did not activate`，且
+`<临时目录>/calendar/calendar.json` 被创建。
+
+## 安装
+
+普通（非桌面托管）profile 直接：
+
+```powershell
+dsh plugin --profile <名字> add "git+https://github.com/zzq4546-arch/dsh-daily-coach.git"
+```
+
+桌面版 profile 由 Electron 独占管理，不能 `dsh plugin add`。手动安装：
+
+1. 把本目录整份复制到 `<DSH_HOME>/profiles/desktop/node_modules/dsh-calendar-coach`
+2. 在 profile 的 `package.json` 里：
+   - `dependencies` 加 `"dsh-calendar-coach": "file:<本目录绝对路径>"`
+   - `dsh.profile.bundles` 数组加 `"dsh-calendar-coach"`
+   - 想停用旧版就同时从 bundles 里去掉 `"dsh-daily-coach"`（数据不会丢）
+3. 重启桌面应用。
+
+## 装好之后怎么验（逐条打勾）
+
+1. 侧栏出现「日历」图标；点开是整页月历（今天那格高亮，格子里有农历小字）。
+2. 在对话里说「记一下 12 月 24 日是恋爱纪念日」，我会回一条带「下一次」的确认，然后侧栏/浮卡里就能看到。
+3. 说「和 TA 在一起是 2026-05-01，100 天和 200 天记得提醒我」→ 回复里会给出第 100/200 天的具体日期。
+4. 说「今天有什么」→ 会给出公历 + 农历 + 当天 DDL + 逾期项。
+5. 浮卡右上角「⤢ 整页」会真的把侧栏上的日历面板展开成整页（按钮会变成「⤢ 浮卡」回到浮卡）；切完关掉应用再开，形态会被记住。
+6. 到点提醒：应用内是红金渐变的醒目卡片 + 提示音；重要节点（纪念日提前 1 天/当天、DDL 到期）还会作为一条聊天消息由我主动发给你。
+
+> `_scratch/` 是自检用的临时目录（无头浏览器 harness 与 vendor 里的 React），可以整份删除，不影响插件。
+> 会话绑定是自动的：第一次在某个会话里用日历工具，聊天提醒就绑到那个会话，不用手动绑。
+
+## 已知边界
+
+- DSH 完全退出时没有任何进程能提醒你；下次打开会补发。
+- `schedule` 记录绑在当前会话上；换会话后用 `calendar_remind` 重新绑一次。
+- 2 月 29 日的纪念日在平年退到 2 月 28 日；农历腊月三十在只有廿九的年份退到廿九。
+- 每周年只报一次（周年那天），不会再额外报一次「第 365 天」。
+
+## 调试与排障（2026-11-17 实战补充）
+
+宿主端在 Electron 里看不到 stdout，所有关键事件都写进
+`D:\DSH\home\calendar\register.log`（apply 开始、ctx 服务形态、每个工具注册成败、提醒排定/清理）。
+出问题先看它。
+
+### 工具注册的三条硬要求（都是宿主 `ctx.tools.register()` 现教的）
+
+1. `output` 必须同时有 `schema` 和 `render`：`must declare output { schema, render, presentationMeta? }`。
+   `render(args, value)` 返回 `[{ type: 'text', text }]`——少了它整个工具注册失败。
+2. 值 schema 不能出现 `type: 'json'`（合法值只有 object/array/string/number/integer/boolean/null），
+   属性节点里也不能写 `required`（会报 `required is not supported on type "boolean"`）。
+   本包统一走 `lib/tools.js` 的 `out()`：`{ type:'object', additionalProperties:true, properties:{ ok, text, ... } }`。
+3. 每个 object 节点必须显式 `additionalProperties`，否则整个插件 activate 失败（不是只坏一个工具）。
+
+### 聊天提醒绑定的规则
+
+- 只在**用户会话**里绑：`session.header.delegationDepth` 或 `options.subagentDepth` > 0 的子 agent 会话直接跳过
+  （子 agent 跑完就散，提醒会投进没人看的会话）。
+- 绑定后早报（daily）与重要节点（一次性 at）都投进这个会话；改绑/解绑会先删旧记录再建新的。
+- 每条聊天提醒的 prompt 末尾带 `[[cal:<key>]]` 标记，同步时按标记比对清单，
+  用户删掉纪念日/改了日期，对应的定时记录会被自动清理。
+
+### 热更新（不用重启桌面应用）
+
+`plugin_manager` 对本插件条目 `include:dsh-calendar-coach` 先 `enabled=false` 再 `enabled=true`，
+宿主会重新 import 一遍并把插件挂回去——改完 `lib/*.js` 用这招即可生效；`client.js` 需要 `node build.mjs`
+并刷新页面。
+
+### 数据里可以安全手动看的东西
+
+`D:\DSH\home\calendar\calendar.json`：`events` / `ddls` / `meta.notifySessionId` / `meta.digestRecord` / `scheduled`。
+`fired` 里是"已经弹过的提醒"的去重键，残留无害。
+**注意**：宿主把状态缓存在内存里，直接手改这个文件会被下一次写入覆盖；
+要改绑定关系请走 `POST /api/dsh-calendar/op {op:'bindSession',payload:{sessionId}}`。
+
+---
+
+## 两种形态（浮卡 / 整页）到底差在哪
+
+| | 浮卡（card） | 整页（page） |
+|---|---|---|
+| 位置 | 右下角浮动卡，盖在对话上 | 占住中间主区，对话退到旁边 |
+| 适合 | 边聊边记 DDL、随手勾完成 | 集中看月视图、批量改纪念日 |
+| 切换 | 卡片头部「⤢ 整页」 | 卡片头部「⤢ 浮卡」，或再点一次侧栏「日历」收起 |
+
+**「⤢ 整页」按钮做两件事**：①把形态切成 page；②调 `ctx.get("layout").selectPanel("dsh-calendar-coach")`
+让 Shell 真正选中我们的面板。第二件是必须的——只切形态而不选中面板时，用户看不到任何变化（早期版本就是只做了 ①，
+所以按了没反应）。点「⤢ 浮卡」则相反：切回 card + `selectPanel(null)` 把主区还给对话。
+
+侧栏「日历」那一行等价于「打开整页」：Shell 选中面板 → PageView 挂载 → 形态自动切到 page。
+
+**改了 client.js 之后**：`node build.mjs` 可让宿主端立刻可用（junction 安装），但浏览器端要**刷新页面**才生效；
+只想重载宿主侧的 `lib/*.js`，用 `plugin_manager set_plugin enabled=false/true` 切两次即可（不用重启应用）。
