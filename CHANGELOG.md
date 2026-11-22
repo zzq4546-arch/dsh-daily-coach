@@ -1,5 +1,12 @@
 # 变更记录
 
+## 0.4.1 — 2026-11-22
+
+- 适配 DSH 0.2.2 的 schedule 服务新接口：`create({ title, prompt, timing, target }, sessionId)`、
+  `edit({ action:'delete', id })`、`list()` 返回 `{ items }`；旧接口保留兜底，两边都能跑。
+  （0.4.0 在 0.2.2 上聊天提醒会报 `invalid_rule`，只有应用内浮层还能弹。）
+- 早报 / 重要节点 / 定点提醒的聊天投递因此恢复正常。
+
 ## 0.4.0 — 2026-11-23
 
 - 新增**定点提醒（几点做什么）**：`calendar_add_alarm` 工具，支持 `daily`（每天）/`weekly`（每周几）/`once`（一次性）；
