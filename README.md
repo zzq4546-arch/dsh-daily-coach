@@ -19,6 +19,8 @@
   - B 重要节点发聊天消息（宿主 `schedule` 服务投递给当前会话，页面没开也能到）
   - C 每天早报（默认 08:00，一条消息汇总今天）
   - 打开时补发 36 小时内漏掉的提醒
+- **「今天」页**：打开插件先看到今天该干什么——阶段任务、本周待办、运动/饮食记录、期末与重要考试日期；
+  考试日期来自宿主的学期配置（`GET /focus`），点「导入到日历」才写成高优先级 DDL（跳过已存在/已过期，返回新增/跳过/过期三类数量）。
 - **两种形态随时切换**：右下角浮卡 ↔ center 列整页（教练面板右上角「⤢」按钮）。
 - **AI 直接落地**：对 DSH 说"记一下 3 月 14 日是恋爱纪念日""这周五前交简历"，模型会调工具写进同一份数据，不用手动点。
 
@@ -39,18 +41,22 @@
 前缀 `/api/dsh-calendar`，必须带 `x-dsh-calendar: 1` 头，跨源请求一律 403。
 
 - `GET /health`、`/state?from&to`、`/today?date`、`/lunar?date`、`/pending`、`/upcoming?days`
-- `POST /op`（`{op, payload}`）、`POST /mode`（`{mode:'card'|'page'}`）
+- `GET /focus` → `{ finals:[{title,date,time,end}], optional:[...] }`（期末 6 场 + 可选六级/蓝桥杯）
+- `POST /op`（`{op, payload}`）、`POST /mode`（`{mode:'card'|'page'}`）；
+  `op=importFocusDates` 把选中的考试日期导入成 DDL，返回 `{added, skipped, expired}`
 
 ## 开发
 
-浏览器端由三个片段拼成，改完必须重新构建：
+浏览器端由四个片段拼成，改完必须重新构建：
 
 ```
-src/coach.js     合并后的每日教练（var COACH）
-src/calendar.js  日历页 + 提醒卡（var CAL）
-src/shell.js     座位注册 / 形态切换 / 轮询（function apply）
+src/focus.js      「今天」页：阶段任务 / 本周待办 / 运动饮食 / 考试日期（var FOCUS）
+src/coach.js      合并后的每日教练（var COACH）
+src/calendar.js   日历页 + 提醒卡（var CAL）
+src/shell.js      座位注册 / 形态切换 / 轮询（function apply）
 
 node build.mjs   # → client.js
+node --check client.js
 ```
 
 片段规则：ES5 语法（`var` + `function`）、无 `import/export`、顶层只有一个绑定、
@@ -117,7 +123,8 @@ dsh --profile caltest web
 3. 说「和 TA 在一起是 2026-05-01，100 天和 200 天记得提醒我」→ 回复里会给出第 100/200 天的具体日期。
 4. 说「今天有什么」→ 会给出公历 + 农历 + 当天 DDL + 逾期项。
 5. 浮卡右上角「⤢」可随时在浮卡/整页之间切换；切完关掉应用再开，形态会被记住。
-6. 到点提醒：应用内是红金渐变的醒目卡片 + 提示音；重要节点（纪念日提前 1 天/当天、DDL 到期）还会作为一条聊天消息由我主动发给你。
+6. 打开插件先落在「今天」页；如果还没导入期末考试，页面上会有「导入到日历」按钮，点完 DDL 里出现 6 场考试，逾期/已存在的会跳过。
+7. 到点提醒：应用内是红金渐变的醒目卡片 + 提示音；重要节点（纪念日提前 1 天/当天、DDL 到期）还会作为一条聊天消息由我主动发给你。
 
 > `_scratch/` 是自检用的临时目录（无头浏览器 harness 与 vendor 里的 React），可以整份删除，不影响插件。
 > 会话绑定是自动的：第一次在某个会话里用日历工具，聊天提醒就绑到那个会话，不用手动绑。

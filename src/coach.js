@@ -142,9 +142,11 @@ var COACH = (function () {
   var STYLE_ID = 'dsh-daily-coach-style';
   var ROOT_ID = 'dsh-daily-coach';
   var PILL_ID = 'dsh-daily-coach-pill';
-  var TAB_KEYS = ['calendar', 'today', 'review', 'notes', 'plan'];
+  var TAB_KEYS = ['focus', 'calendar', 'today', 'review', 'notes', 'plan'];
   var PAGE_CLASS = 'ddc-page';
   var PLAN_MAX_BYTES = 200000;
+  /* Keep the floating controls below the native DSH title bar. */
+  var FLOAT_TOP = 64;
 
   /* ------------------------------------------------------------------ */
   /* 3. Small helpers                                                    */
@@ -392,7 +394,8 @@ var COACH = (function () {
       collapsed: false,
       pos: null,
       auditOpen: false,
-      tab: 'today',
+      tab: 'focus',
+      focus: { days: {}, weeks: {}, backlog: {}, baseline: 0 },
       reviewDate: todayKey(),
       editingNote: null
     };
@@ -414,7 +417,22 @@ var COACH = (function () {
     out.pos = (s.pos && typeof s.pos.left === 'number' && typeof s.pos.top === 'number')
       ? { left: s.pos.left, top: s.pos.top } : null;
     out.auditOpen = !!s.auditOpen;
-    out.tab = TAB_KEYS.indexOf(s.tab) >= 0 ? s.tab : 'today';
+    out.tab = TAB_KEYS.indexOf(s.tab) >= 0 ? s.tab : 'focus';
+    if (!s.focus && out.tab === 'today') out.tab = 'focus';
+    if (s.focus && typeof s.focus === 'object') {
+      var f = s.focus;
+      out.focus = {
+        days: f.days && typeof f.days === 'object' ? f.days : {},
+        weeks: f.weeks && typeof f.weeks === 'object' ? f.weeks : {},
+        backlog: f.backlog && typeof f.backlog === 'object' ? f.backlog : {},
+        target: Number(f.target) || 0,
+        baseline: Number(f.baseline) || 0,
+        deadline: parseDateKey(f.deadline) ? f.deadline : '',
+        habit: typeof f.habit === 'string' ? f.habit.slice(0, 60) : '',
+        cet: f.cet === true,
+        contest: f.contest === true
+      };
+    }
     out.reviewDate = parseDateKey(s.reviewDate) ? s.reviewDate : out.reviewDate;
     out.editingNote = null;
     return out;
@@ -667,7 +685,7 @@ var COACH = (function () {
   /* ------------------------------------------------------------------ */
 
   var CSS = [
-    '#' + ROOT_ID + '{position:fixed;top:64px;right:16px;width:336px;max-width:calc(100vw - 24px);z-index:2147482000;',
+    '#' + ROOT_ID + '{position:fixed;top:' + FLOAT_TOP + 'px;right:16px;width:336px;max-width:calc(100vw - 24px);z-index:2147482000;-webkit-app-region:no-drag;',
     'font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;color:#e8ecf4;color-scheme:dark;',
     'background:linear-gradient(165deg,rgba(24,28,38,.97),rgba(16,19,26,.97));border:1px solid rgba(255,255,255,.09);',
     'border-radius:16px;box-shadow:0 18px 48px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.2);',
@@ -796,7 +814,7 @@ var COACH = (function () {
     '.ddc-card b{color:#dfe6f2}',
     '.ddc-btns{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}',
     '.ddc-rule{height:1px;background:rgba(255,255,255,.07);margin:10px 0}',
-    '#' + PILL_ID + '{display:none;position:fixed;top:64px;right:16px;z-index:2147482000;align-items:center;gap:7px;',
+    '#' + PILL_ID + '{display:none;position:fixed;top:' + FLOAT_TOP + 'px;right:16px;z-index:2147482000;align-items:center;gap:7px;-webkit-app-region:no-drag;',
     'padding:7px 12px;border-radius:99px;background:rgba(24,28,38,.97);border:1px solid rgba(255,255,255,.10);',
     'box-shadow:0 10px 30px rgba(0,0,0,.4);color:#e8ecf4;font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;',
     'cursor:grab;user-select:none;touch-action:none}',
@@ -827,14 +845,16 @@ var COACH = (function () {
     '<button class="ddc-collapse" type="button" aria-label="收起面板" data-act="collapse">–</button>' +
     '</div>' +
     '<div class="ddc-tabs" role="tablist">' +
+    '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="focus" data-ref="tabFocus">今天</button>' +
     '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="calendar" data-ref="tabCalendar">日历</button>' +
-    '<button type="button" class="ddc-tab is-active" role="tab" aria-selected="true" data-tab="today" data-ref="tabToday">今日</button>' +
+    '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="today" data-ref="tabToday">打卡</button>' +
     '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="review" data-ref="tabReview">复盘</button>' +
     '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="notes" data-ref="tabNotes">笔记</button>' +
     '<button type="button" class="ddc-tab" role="tab" aria-selected="false" data-tab="plan" data-ref="tabPlan">计划</button>' +
     '</div>' +
     '<div class="ddc-alert" data-ref="alert"></div>' +
     '<div class="ddc-body">' +
+    '<section class="ddc-pane" data-pane="focus" role="tabpanel" aria-label="今天"></section>' +
 
     /* --- calendar (CAL draws into this pane) --- */
     '<section class="ddc-pane" data-pane="calendar" role="tabpanel"></section>' +
@@ -911,6 +931,7 @@ var COACH = (function () {
 
     /* --- plan --- */
     '<section class="ddc-pane" data-pane="plan" role="tabpanel">' +
+    '<div class="ddc-card">' + FOCUS.summary() + '</div>' +
     '<div class="ddc-card" data-ref="planCard"></div>' +
     '<div class="ddc-btns">' +
     '<button type="button" class="ddc-mini" data-act="plan-edit">编辑计划</button>' +
@@ -1228,14 +1249,14 @@ var COACH = (function () {
   }
 
   function applyTab() {
-    var tab = state.tab || 'today';
-    if (TAB_KEYS.indexOf(tab) < 0) tab = 'today';
+    var tab = state.tab || 'focus';
+    if (TAB_KEYS.indexOf(tab) < 0) tab = 'focus';
     for (var i = 0; i < TAB_KEYS.length; i++) {
       var key = TAB_KEYS[i];
       var pane = paneEls[key];
       if (pane) pane.className = 'ddc-pane' + (key === tab ? ' is-active' : '');
     }
-    var tabs = { calendar: els.tabCalendar, today: els.tabToday, review: els.tabReview, notes: els.tabNotes, plan: els.tabPlan };
+    var tabs = { focus: els.tabFocus, calendar: els.tabCalendar, today: els.tabToday, review: els.tabReview, notes: els.tabNotes, plan: els.tabPlan };
     for (var k in tabs) {
       if (!Object.prototype.hasOwnProperty.call(tabs, k)) continue;
       var btn = tabs[k];
@@ -1252,6 +1273,7 @@ var COACH = (function () {
     updateReview();
     updateNotes();
     updatePlanSummary();
+    FOCUS.update();
     applyTab();
     applyPos();
   }
@@ -1614,7 +1636,7 @@ var COACH = (function () {
   function bounded(left, top, w, h) {
     return {
       left: clamp(left, 8, Math.max(8, window.innerWidth - w - 8)),
-      top: clamp(top, 8, Math.max(8, window.innerHeight - h - 8))
+      top: clamp(top, FLOAT_TOP, Math.max(FLOAT_TOP, window.innerHeight - h - 8))
     };
   }
 
@@ -1737,6 +1759,7 @@ var COACH = (function () {
     state.tab = tab;
     saveState();
     applyTab();
+    if (tab === 'focus') FOCUS.refresh();
     if (tab === 'review') updateReview();
     if (tab === 'notes') updateNotes();
     if (tab === 'plan') updatePlanSummary();
@@ -1959,6 +1982,7 @@ var COACH = (function () {
   /* ------------------------------------------------------------------ */
 
   function tick() {
+    FOCUS.tick();
     var now = new Date();
     var key = keyOf(now);
     if (key !== renderedKey) {
@@ -1984,7 +2008,7 @@ var COACH = (function () {
   function buildStyleEl() {
     var style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = CSS;
+    style.textContent = CSS + '\n' + FOCUS.css;
     return style;
   }
 
@@ -2029,7 +2053,8 @@ var COACH = (function () {
       }
       if (!document.getElementById(STYLE_ID)) document.head.appendChild(buildStyleEl());
       applyMode();
-      renderAll();
+      /* 换宿主后的重渲染失败不能把整个面板留在旧容器里 */
+      try { renderAll(); } catch (err) { /* 下一次 paint 会补上 */ }
       return root;
     }
 
@@ -2083,6 +2108,8 @@ var COACH = (function () {
     els = {};
     paneEls = {};
     refs(host);
+    FOCUS.mount(paneEls.focus, { data: function () { return state.focus; }, save: saveState,
+      escape: escapeHtml, api: opts.focusApi });
 
     host.addEventListener('click', onClick);
     host.addEventListener('keydown', onKeyDown);
@@ -2118,6 +2145,7 @@ var COACH = (function () {
 
   function unmount() {
     flushAll();
+    FOCUS.unmount();
     if (timer !== null) { clearInterval(timer); timer = null; }
     if (storageHandler) { window.removeEventListener('storage', storageHandler); storageHandler = null; }
     window.removeEventListener('resize', onResize);

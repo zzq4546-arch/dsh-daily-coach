@@ -3,9 +3,9 @@
  *
  * Two faces live in one package: the host half (lib/*.js) is plain ESM and needs
  * no build; the browser half must be ONE file served as /plugins/<id>/client.js.
- * Authoring one 5000-line file is not maintainable, so the browser half is three
- * script fragments concatenated here:
+ * Author the browser half as separate script fragments concatenated here:
  *
+ *   src/focus.js     -> var FOCUS = (function () { ... })();   study plan and activity log
  *   src/coach.js     -> var COACH = (function () { ... })();   the merged daily coach
  *   src/calendar.js  -> var CAL   = (function () { ... })();   calendar pane + reminder card
  *   src/shell.js     -> function apply(ctx) { ... }            slots wiring / mode switch / polling
@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ID = 'dsh-calendar-coach'
 const PARTS = [
+  { file: 'src/focus.js', binding: 'FOCUS' },
   { file: 'src/coach.js', binding: 'COACH' },
   { file: 'src/calendar.js', binding: 'CAL' },
   { file: 'src/shell.js', binding: 'apply' },

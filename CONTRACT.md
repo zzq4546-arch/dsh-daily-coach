@@ -101,6 +101,17 @@ localStorage 键名一字不改（`dsh-daily-coach.v2` / `dsh-daily-coach.plan.v
 
 前端不拼 URL 细节：shell 提供 `api` 对象（见 §5），calendar.js 只用 `api.*`。
 
+### 3.1 `/focus`（考试日期）
+
+```
+GET /api/dsh-calendar/focus
+→ { ok:true, data:{ finals:[{title,date,time,end}], optional:[{title,date,time,end,kind}] } }
+```
+
+数据源 `lib/focus-dates.js`（学期硬编码，后续抽成配置）。导入走 `POST /op` 的
+`{op:'importFocusDates', payload:{ keys:['date|title', ...] }}`：已存在同日期同标题的 DDL 跳过，
+日期早于今天记为过期，返回 `{added, skipped, expired}`。
+
 ## 4. 提醒引擎（宿主）
 
 - 每条 Event 的每个 `leadDays` × `remindTime`、每条未完成 DDL 的 `date+time`（提前 2 小时与到点各一次）、
@@ -134,6 +145,12 @@ localStorage 键名一字不改（`dsh-daily-coach.v2` / `dsh-daily-coach.plan.v
   也渲染进同一个 container，不再 append 到 `document.body`。`document.body` 允许出现的仅剩
   `legacyCopy` / `downloadText` 里那两个临时元素（保留原样）。
 - 原有 localStorage 读写、审批码、计划、复盘、笔记逻辑**一行不改**。
+
+### 5.0 `FOCUS`（src/focus.js）
+
+`mount(host, {data, save, api})` 后由 `COACH` 的 `focus` 页签驱动；`summary()` 给浮卡顶部摘要，
+`refresh()` 在切到该页时重拉数据，`tick()` 由 shell 的 30s 泵调用。`api.dates()` 读 `/focus`，
+`api.import(selection)` 走 `importFocusDates` op。CSS 由 `FOCUS.css` 单独导出，构建时并入样式。
 
 ### 5.2 `CAL`（src/calendar.js，由 calendar-ui 负责）
 

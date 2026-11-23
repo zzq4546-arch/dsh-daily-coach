@@ -212,13 +212,29 @@ function apply(ctx) {
     }
     var mounted = false;
     try {
-      COACH.opts = { mode: usePage ? 'page' : 'card', onToggleMode: toggleMode };
-      mounted = !!COACH.mount(el);
+      COACH.opts = {
+        mode: usePage ? 'page' : 'card',
+        onToggleMode: toggleMode,
+        focusApi: {
+          dates: function () { return req('GET', '/focus').then(function (j) { return j.data; }); },
+          importDates: function (selection) {
+            return req('POST', '/op', { op: 'importFocusDates', payload: selection }).then(function (j) {
+              if (S.calReady) CAL.refresh();
+              return j.data;
+            });
+          }
+        }
+      };
+      COACH.mount(el);
       COACH.setMode(usePage ? 'page' : 'card');
     } catch (err) {
-      mounted = false;
+      /* 渲染中途抛错也要把面板算作已挂载：DOM 已经搬过去了，
+         否则 S.host 停在上一个容器，下一次切形态会直接 early-return，面板永远回不来 */
     }
-    if (!mounted) return;
+    /* 以 DOM 真实归属为准：root 真的在这个容器里才算挂上了（COACH.root 是取值函数） */
+    var coachRoot = null;
+    try { coachRoot = (typeof COACH.root === 'function') ? COACH.root() : COACH.root; } catch (err3) { coachRoot = null; }
+    if (coachRoot && !el.contains(coachRoot)) return;
     S.host = el;
     if (S.calReady && typeof CAL !== 'undefined' && CAL) {
       try { CAL.renderPane(null); } catch (err2) { /* CAL 会自己重试 */ }
