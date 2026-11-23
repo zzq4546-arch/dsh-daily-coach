@@ -1,6 +1,6 @@
 {
   "name": "dsh-calendar-coach",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "日历 + 每日 DDL + 准时提醒 + 每日教练：DSH Web 界面里的日历页签与浮动卡（公历/农历、纪念日与百天里程碑、A+B+C 三种提醒），并把 dsh-daily-coach 0.2 的打卡/复盘/笔记/计划合进同一个插件。",
   "type": "module",
   "main": "lib/index.js",

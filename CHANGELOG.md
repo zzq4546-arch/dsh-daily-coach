@@ -1,5 +1,10 @@
 # 变更记录
 
+## 0.4.2 — 2026-11-23
+
+- 修：`calendar_today` 的「接下来 30 天」把逾期项按过去的日期又列了一遍（逾期区已经列过）。
+  现在过去日期的候选一律不进未来清单。
+
 ## 0.4.1 — 2026-11-22
 
 - 适配 DSH 0.2.2 的 schedule 服务新接口：`create({ title, prompt, timing, target }, sessionId)`、
