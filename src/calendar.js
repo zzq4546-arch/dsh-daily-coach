@@ -927,6 +927,9 @@ var CAL = (function () {
     '.calc-ddl.is-done .calc-check::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--dsw-alias-label-primary-foreground,#fff);border-width:0 2px 2px 0;transform:rotate(42deg)}',
     '.calc-x{appearance:none;flex:none;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8f98);font-family:inherit;font-size:10.5px;line-height:1;padding:3px 5px;border-radius:6px;cursor:pointer}',
     '.calc-x:hover{color:var(--dsw-alias-state-error-primary,#e5484d);background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}',
+    '.calc-confirm{flex:none;font-size:10.5px;color:var(--dsw-alias-state-error-primary,#e5484d);margin-left:auto;padding-right:2px}',
+    '.calc-x.is-ghost{color:var(--dsw-alias-label-tertiary,#8a8f98)}',
+    '.calc-x.is-ghost:hover{color:var(--dsw-alias-label-secondary,#5c6169);background:transparent}',
     '.calc-add{display:flex;gap:6px;align-items:center;margin-top:8px}',
     '.calc-add .calc-input{flex:1 1 auto;min-width:0}',
     '.calc-input{font-family:inherit;font-size:12px;line-height:1.3;color:var(--dsw-alias-label-primary,#191919);background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.14));border-radius:8px;padding:5px 8px;outline:none;min-width:0}',
@@ -1339,6 +1342,19 @@ var CAL = (function () {
       '</span></div></div>';
   }
 
+  /* 删除确认做成"行内两段式"：第一次点变「确定删除？ 删除/取消」，
+     状态画进 DOM 而不是只改按钮文字——这样任何一次重绘都不会把提示吞掉。
+     6 秒没操作自动收回。 */
+  function ddlActionsHtml(ddl) {
+    var id = esc(ddl.id || '');
+    if (S.confirm && S.confirm['ddl:' + ddl.id]) {
+      return '<span class="calc-confirm">确定删除？</span>' +
+        '<button type="button" class="calc-x" data-act="ddl-del-yes" data-id="' + id + '">删除</button>' +
+        '<button type="button" class="calc-x is-ghost" data-act="ddl-del-cancel" data-id="' + id + '">取消</button>'
+    }
+    return '<button type="button" class="calc-x" data-act="ddl-del" data-id="' + id + '">删除</button>'
+  }
+
   function ddlRowHtml(ddl, overdue) {
     var tags = [];
     if (ddl.time) tags.push('<span class="calc-chip">' + esc(ddl.time) + '</span>');
@@ -1350,7 +1366,7 @@ var CAL = (function () {
       ' aria-label="' + (ddl.done ? '标记未完成' : '标记完成') + '" aria-pressed="' + (ddl.done ? 'true' : 'false') + '"></button>' +
       '<div class="calc-row-main"><b class="calc-row-title">' + esc(ddl.title || 'DDL') + '</b>' +
       '<span class="calc-tags">' + tags.join('') + '</span></div>' +
-      '<button type="button" class="calc-x" data-act="ddl-del" data-id="' + esc(ddl.id || '') + '">删除</button>' +
+      ddlActionsHtml(ddl) +
       '</div>';
   }
 
@@ -1861,7 +1877,8 @@ var CAL = (function () {
       schedulePaint();
       return state;
     }, function (err) {
-      flash('操作失败，请稍后重试', 'error');
+      var why = (err && (err.message || err.error)) || ''
+      flash('操作失败' + (why ? '：' + why : '，请稍后重试'), 'error');
       throw err;
     });
   }
@@ -1914,7 +1931,13 @@ var CAL = (function () {
     } else if (act === 'ddl-toggle') {
       toggleDdl(target.getAttribute('data-id'));
     } else if (act === 'ddl-del') {
-      deleteDdl(target.getAttribute('data-id'), target);
+      armDdlDelete(target.getAttribute('data-id'));
+    } else if (act === 'ddl-del-yes') {
+      var yesId = target.getAttribute('data-id');
+      if (S.confirm) delete S.confirm['ddl:' + yesId];
+      deleteDdl(yesId);
+    } else if (act === 'ddl-del-cancel') {
+      armDdlDelete(target.getAttribute('data-id'), true);
     } else if (act === 'ddl-add') {
       addDdl();
     } else if (act === 'f-cal') {
@@ -2025,10 +2048,31 @@ var CAL = (function () {
       function () { /* 已提示 */ });
   }
 
-  function deleteDdl(id, button) {
+  function armDdlDelete(id, cancel) {
+    if (!id) return;
+    S.confirm = S.confirm || {};
+    if (cancel) {
+      delete S.confirm['ddl:' + id];
+      schedulePaint();
+      return;
+    }
+    var stamp = Date.now();
+    S.confirm['ddl:' + id] = stamp;
+    schedulePaint();
+    setTimeout(function () {
+      if (S.confirm && S.confirm['ddl:' + id] === stamp) {
+        delete S.confirm['ddl:' + id];
+        schedulePaint();
+      }
+    }, 6000);
+  }
+
+  function deleteDdl(id) {
     var ddl = findDdl(id);
-    if (!ddl) return;
-    if (!needConfirm('ddl:' + id, button)) return;
+    if (!ddl) {
+      flash('没找到这条 DDL，可能已被删除', 'error');
+      return;
+    }
     safeOp('ddl.delete', { id: id }).then(function (state) {
       if (state) flash('已删除 DDL', 'ok');
     }, function () { /* 已提示 */ });
