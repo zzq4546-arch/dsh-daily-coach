@@ -1,5 +1,11 @@
 # 变更记录
 
+## 0.5.1 — 2026-11-24
+
+- 修：`lib/ops.js` 用了 `toDayNumber` 却没 import，导致 `calendar_today` 直接报
+  `toDayNumber is not defined`（0.4.2 引入的「过去日期不进未来清单」那行代码）。
+  早报和工具查询都会挂，现补上 import 并实测 `calendar_today` 正常。
+
 ## 0.5.0 — 2026-11-23
 
 **「今天」页 + 期末考试导入 + 胶囊顶部限位修复。**
